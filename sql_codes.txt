@@ -1,0 +1,1786 @@
+SELECT product_id , SUM(product_quantity) AS total_qty FROM  order_items 
+group by product_id
+having sum(product_quantity) = 
+(select  MAX(SUM(product_quantity)) as total_qty
+from order_items
+group by product_id)
+order by total_qty desc;
+
+-----------------------------customer with highest revenue
+select o.customer_id, c.customer_fname||' '||c.customer_lname name,SUM(oi.product_quantity*p.PRODUCT_PRICE)AS revenue
+FROM ONLINE_CUSTOMER c , ORDER_HEADER o ,ORDER_ITEMS oi,PRODUCT p
+where c.customer_id = o.customer_id
+and o.order_id = oi.order_id 
+and oi.product_id = p.product_id
+group by o.customer_id,c.customer_fname||' '||c.customer_lname
+having SUM(oi.product_quantity*p.PRODUCT_PRICE)=(select max(SUM(oi.product_quantity*p.PRODUCT_PRICE))AS revenue
+FROM ONLINE_CUSTOMER c , ORDER_HEADER o ,ORDER_ITEMS oi,PRODUCT p
+where c.customer_id = o.customer_id
+and o.order_id = oi.order_id 
+and oi.product_id = p.product_id
+group by o.customer_id,c.customer_fname);
+------------------------------------
+
+
+-----------
+select product_id,product_desc,len, width from product where len >100 
+INTERSECT
+SELECT product_id,product_desc,len, width from product where width >100;
+
+
+-------------------------- produc-wise total qty and revenue
+select p.product_id,p.product_desc,NVL(sum(oi.PRODUCT_QUANTITY),0) total_qty,NVL(sum(oi.PRODUCT_QUANTITY*p.PRODUCT_PRICE),0) revenue
+FROM PRODUCT p LEFT OUTER JOIN  ORDER_ITEMS oi
+ON p.product_id = oi.product_id
+group by p.product_id,p.product_desc
+order by revenue desc;
+-----------------------in how many orders most expensive product has been ordered 
+
+select count(distinct(order_id)) from order_items oi , product p
+where oi.product_id = p.product_id 
+and p.product_PRICE = (select max(p.product_price) from  product p );
+--------------------------
+
+--- IN CASE OF TOTAL ROW DUPLICACY <----------------(code not complete here)
+select product_id,product_desc,product_price from product
+group by product_id,product_desc,product_price
+having count(*) > 1
+order by product_id;
+----
+select * from temp_prod p1
+where(product_id,product_desc,product_price) IN 
+(select product_id , product_desc,product_price from temp_prod p2
+where p1.row_id > p2.row_id
+and p1.product_id = p2.product_id
+and p1.product_desc = p2.product_desc
+and p1.product_price = p2.product_price);
+
+
+---or----
+
+select * from temp_prod p1
+where  EXISTS
+(select product_id , product_desc,product_price from temp_prod p2
+where p1.row_id > p2.row_id
+and p1.product_id = p2.product_id
+and p1.product_desc = p2.product_desc
+and p1.product_price = p2.product_price);
+
+
+select sysdate from employees;
+select sysdate from dual;
+select sysdate from employees where rownum=1;
+select sysdate from employees where employee_id = 100;
+select sysdate from employees where 1=2; -- here where condition is not satisfied, so no rows are displayed
+
+--- NULL CAN'T BE COMPARED WITH NULL , BUT WE CAN CHECK WHETHER IT'S SAME OR NOT
+select case when NULL = NULL THEN 'YES'
+    ELSE 'NO' END AS RESULT
+FROM DUAL;--NO
+
+select case wheN NULL IS NULL THEN 'YES'
+    ELSE 'NO' END AS RESULT
+FROM DUAL;--YES
+
+SELECT * FROM EMPLOYEES WHERE DEPARTMENT_ID = null;---
+SELECT * FROM EMPLOYEES WHERE DEPARTMENT_ID IS null;--- 
+--exists is a correlated sub-query
+
+SELECT COUNT(DEPARTMENT_ID) FROM EMPLOYEES WHERE DEPARTMENT_ID IS NULL; -- GIVES 0 AS OUTPUT SINCE, AGGREGATE FUNCTONS DOESN'T CONSIDER NULL VALUES
+SELECT COUNT(NVL(DEPARTMENT_ID,0)) FROM EMPLOYEES WHERE DEPARTMENT_ID IS NULL;
+SELECT DEPARTMENT,COUNT(*) FROM EMPLOYEES WHERE DEPARTMENT_ID IS NULL
+GROUP BY DEPARTMENT_ID;
+
+--- AGGREGATE FUNCTONS DOESN'T CONSIDER NULL VALUES
+
+
+-- ALL OF THESE GIVE SAME OUTPUT
+SELECT COUNT(*) FROM EMPLOYEES;
+SELECT COUNT(EMPLOYEE_ID) FROM EMPLOYEES; -- PRIMARY KEY
+SELECT COUNT(SALARY) FROM EMPLOYEES; -- NOT NULL VALUES 
+SELECT COUNT(NVL(DEPARTMENT_ID,0)) FROM EMPLOYEES; --NVL OF ANY COLUMN
+
+--------------------
+Select employee_id, first_name , salary from employees
+where salary = 
+(select max(salary) 
+from employees
+where salary < (select max(salary) from employees));
+-----
+SELECT * FROM (
+select employee_id , salary , DENSE_RANK() OVER (ORDER BY SALARY DESC) AS RANK
+FROM EMPLOYEES)
+WHERE RANK = 2;
+
+--------
+SELECT * FROM EMPLOYEES 
+WHERE  REGEXP_LIKE (first_name,'S[aei]'); --starting with s and having a/e/i
+
+SELECT * FROM EMPLOYEES 
+WHERE  REGEXP_LIKE (first_name,'[aei]$'); --$ - symbol specify -ending with  a/e/i
+-----------------
+select first_name,substr(first_name,-3) as last_3_char from employees
+order by substr(first_name,-3);
+---------------------
+select product_id , product_desc, product_class_code,product_price
+from product  p1 
+where product_price IN
+(select  max(product_price) from product p2
+where p1.product_class_code = p2.product_class_code)
+order by product_class_code desc;
+
+--here we need to link product_class_code from outer table to inner table to ensure the max from each product_class_code is mapped. 
+-- but using group by gives a list of values i.e., max of every group .here it's not specified that the value of max of each
+-- product_class_code is this ... so for that we use the above type.
+select count(distinct(product_class_code)) from product;
+--------
+--cumulative salary of employees
+select e1.employee_id,e1.salary , SUM(e2.salary)
+from employees e1 INNER JOIN employees e2
+on e2.employee_id <= e1.employee_id
+group by e1.employee_id,e1.salary
+order by 1;
+--- it's a self join with inner join 
+
+
+-------------------------market basket analysis----
+select order_id , product_id from order_items oi1
+where order_id in
+(select order_id from order_items oi2
+where oi1.order_id = oi2.order_id
+and product_id = 201)
+and product_id != 201
+order by 1,2;
+-----------------------------------
+-----ROLLUP & CUBE-------------
+--ordinary group by
+select department_id , job_id , sum(salary)
+from employees
+group by  department_id ,job_id
+order by department_id ,job_id;
+
+-- group by
+select department_id ,NVL(job_id,'**dept total**') as job_id , sum(salary)
+from employees
+group by rollup( department_id ,job_id)
+order by  department_id ,job_id;
+------------
+select NVL(to_char(department_id),'**JOB total**')as dept_id,NVL(job_id,'**dept total**') as job_id , sum(salary)
+from employees
+group by CUBE(department_id ,job_id)
+order by  department_id ,job_id ;
+
+
+
+
+
+-------------------
+
+
+
+
+
+--------
+SELECT * FROM EMPLOYEES;
+
+SELECT employee_id , first_name FROM employees
+where department_id = 80
+and commission_pct IS NOT NULL;
+
+SELECT employee_id , first_name,last_name FROM employees
+WHERE first_name LIKE '%vid'; -- % means pattern match
+
+
+SELECT employee_id , first_name , last_name FROM employees
+WHERE last_name LIKE '___'; -- here i gave 3 _ symbol to get first names with 3 characters
+
+
+
+-- ALL job titles whose max salary is > 10000 (9 rows)
+SELECT job_title  FROM jobs
+WHERE max_salary > 10000 ;
+
+-- Select all job titles whose min salary is >8000 and max_salary < 20000 (3 rows)
+SELECT job_title  FROM jobs
+WHERE min_salary > 8000
+and max_salary < 20000;
+
+-- Select all locations (id,city) wich do not have any state province mentioned(6 rows)
+SELECT LOCATION_ID , city   FROM LOCATIONS
+WHERE STATE_PROVINCE is null ;
+
+-- List all IT related departments where there are no managers(2 rows)
+SELECT DEPARTMENT_NAME  FROM DEPARTMENTs
+WHERE DEPARTMENT_NAME like 'IT %' 
+and MANAGER_ID is null;
+
+--List all departments with managers for location id 1700(5 rows)
+SELECT DEPARTMENT_NAME   FROM DEPARTMENTs
+WHERE location_id = 1700
+and manager_id is not null; 
+
+
+SELECT employee_id , salary , commission_pct,salary + (salary*commission_pct) AS gross_sal
+FROM Employees 
+WHERE department_id IN (20,30); -- ##department (20,30) means either 20 or 30  -- Here commission_pct is null which gives the total expression as null ,we avoid it by doing the following way.
+
+
+SELECT employee_id , salary , NVL(commission_pct,0.1) as commission ,salary + (salary * NVL(commission_pct,0.1) ) AS gross_sal
+FROM Employees 
+WHERE department_id IN (20,30); -- ## NVL converts null values to zeroes. and NVL(x,9) means in case of null treat it as 9
+
+SELECT employee_id ,department_id , salary ,commission_pct, NVL(commission_pct,0) as commission ,salary + (salary * NVL(commission_pct,0.1) ) AS gross_sal
+FROM Employees 
+WHERE department_id = 20
+or department_id = 30
+or department_id = 80;
+
+-- employees and their salaries who draw salary > 10000 from dept 30 or 50
+SELECT employee_id ,FIRST_NAME, salary , department_id
+FROM Employees 
+WHERE department_id IN (50,30)
+and salary > 10000 ;
+
+
+SELECT employee_id ,FIRST_NAME,last_name, salary , department_id
+FROM Employees 
+WHERE last_name LIKE 'A%' -- letters within quotes are case sensitive
+and FIRST_NAME LIKE 'D%';
+
+
+SELECT employee_id ,FIRST_NAME,last_name, salary , department_id
+FROM Employees 
+WHERE last_name LIKE 'A%' -- letters within quotes are case sensitive
+and laST_NAME LIKE '%n';
+
+SELECT employee_id ,FIRST_NAME,last_name, salary , department_id , hire_date , (SYSDATE -  hire_date) as days_of_service
+FROM Employees 
+WHERE HIRE_DATE > '01-Jan-2000'; -- employees joined after january 1 2000 . Here date is in the character format specified as per the database. 
+
+SELECT employee_id ,FIRST_NAME,last_name, salary , department_id , hire_date , ROUND((SYSDATE -  hire_date)/365 ,2)as years_of_service
+FROM Employees 
+WHERE HIRE_DATE > '01-Jan-2000';
+
+SELECT SYSDATE FROM EMPLOYEES;  -- IF WE USE SELECT WE NEED TO USE 'FROM' STATEMENT.THEN WE NEED TO SPECIFY TABLE. SYSDATE , ETC., ARE CALLED PSEUDO COLUMNS
+
+SELECT SYSDATE FROM DUAL ; -- DUAL IS A SPECIAL TABLE IN ORACLE WHICH HAS 1 ROW AND 1 COLUMN. IT HAS A DUMMY VARIABLE
+
+SELECT (1/(365*24)) FROM DUAL ; --(1 HOUR IN TERMS OF YEAR)
+
+SELECT SYSDATE+1 AS TOMORROW FROM DUAL ;
+
+-- DISPLAY PEOPLE WITH MORE THAN 10 YEARS OF EXPERIENCE
+SELECT employee_id ,FIRST_NAME,last_name,  department_id , hire_date , ROUND((SYSDATE -  hire_date)/365 ,2)as years_of_service
+FROM Employees 
+WHERE HIRE_DATE > '01-Jan-2000'
+AND ROUND((SYSDATE -  hire_date)/365 ,2) > 10
+ORDER BY ROUND((SYSDATE -  hire_date)/365 ,2) DESC ; -- DESC GIVES IN DESCENDING ORDER
+
+-- ORDER BY IS THE ONLY CLAUSE THAT CAN USE THE ALIAS NAMES , BY DEFAULT, ORDER BY GIVE SDATA IN ASCENDING ORDER
+SELECT employee_id ,FIRST_NAME,last_name,  department_id , hire_date , ROUND((SYSDATE -  hire_date)/365 ,2)as years_of_service
+FROM Employees 
+WHERE HIRE_DATE > '01-Jan-2000'
+AND ROUND((SYSDATE -  hire_date)/365 ,2) > 10
+ORDER BY years_of_service DESC ;
+
+-- ORDER BY SHOULD ALWAYS COME IN THE LAST STATEMENT.
+
+SELECT employee_id ,FIRST_NAME,last_name,  department_id , hire_date , ROUND((SYSDATE -  hire_date)/365 ,2)as years_of_service
+FROM Employees 
+WHERE HIRE_DATE > '01-Jan-2000'
+AND ROUND((SYSDATE -  hire_date)/365 ,2) > 10
+ORDER BY LAST_NAME ;
+
+SELECT LAST_NAME , SALARY
+FROM EMPLOYEES
+WHERE SALARY >= 10000 AND SALARY <= 25000
+-- IS SAME AS
+SELECT LAST_NAME , SALARY
+FROM EMPLOYEES
+WHERE SALARY BETWEEN  10000 AND 25000; -- INCLUSIVE
+
+
+select customer_fname, customer_lname from online_customer
+where customer_id in (select customer_id 
+                      from order_header 
+                      where order_id in (select oi.order_id from order_items oi
+                                         inner join product p
+                                         on oi.product_id = p.product_id 
+                                         group by oi.order_id
+                                         having max(oi.product_quantity*p.product_price) = (select max(ot.product_quantity*pd.product_price) from order_items ot
+                                         inner join product pd
+                                         on ot.product_id = pd.product_id)));
+
+
+
+
+SELECT LAST_NAME , SALARY
+FROM EMPLOYEES
+WHERE SALARY > 10000 AND SALARY < 25000
+-- IS SAME AS
+SELECT LAST_NAME , SALARY
+FROM EMPLOYEES
+WHERE SALARY BETWEEN  9999 AND 24999 -- INCLUSIVE
+
+ -- PERFORMANCE OF THE 1ST QUERY IS BETTER THAN THE 'BETWEEN'
+ 
+ SELECT ROUND(123.456 ,2),ROUND(123.456 ,1),ROUND(123.456 ,0),ROUND(125 ,-1) FROM DUAL; -- THE LAST COMMENT GIVES ROUNDED OFF NUMBER TO UNITS PLACE
+ SELECT ROUND(150 ,-2),ROUND(250 ,-2) FROM DUAL; -- FIRST ANSWER IS 200, 2ND IS 300
+ 
+ SELECT TRUNC(150 ,-2),TRUNC(250 ,-2) FROM DUAL; -- ROUND OF TO LESSER SIDE VALUE 
+ 
+  SELECT FLOOR(123.9999 ),CEIL(123.0000001 ) FROM DUAL; -- FLOOR MEANS ROUNDING OFF TO LESSER VALUE, CEIL MEANS ROUNDING OFF TO LARGER VALUE NEXT
+ 
+ SELECT TRUNC(1800/500,0) FROM DUAL; -- TRUNC AND FLOOR ARE SIMILAR
+ -- TRUNC(X,0) IS SAME AS FLOOR
+ 
+ SELECT UPPER(FIRST_NAME), LOWER(LAST_NAME),INITCAP(JOB_ID)
+ FROM EMPLOYEES
+ WHERE LOWER(JOB_ID) LIKE '%clerk' ;
+ 
+ SELECT INITCAP('a quick brown fox jumped over the lazy dogs') from dual;
+  SELECT SUBSTR('a quick brown fox jumped over the lazy dogs',2,6) from dual; -- 2,6 means from 2nd position 6 characters INCLUDING SPACE
+  
+  
+   SELECT UPPER(FIRST_NAME), LOWER(LAST_NAME),SUBSTR(LAST_NAME,3)
+ FROM EMPLOYEES
+ WHERE LOWER(JOB_ID) LIKE '%clerk' ;
+ 
+SELECT UPPER(FIRST_NAME), LOWER(LAST_NAME),SUBSTR(LAST_NAME,3),
+INSTR(FIRST_NAME,'ll') -- gives the starting position of the given small string in the specified string
+ FROM EMPLOYEES
+ WHERE LOWER(JOB_ID) LIKE '%clerk' ;
+ 
+ SELECT UPPER(FIRST_NAME), LOWER(LAST_NAME),SUBSTR(LAST_NAME,3),
+INSTR(FIRST_NAME,'ll')  -- displays the observations with instr condition satisfied
+ FROM EMPLOYEES
+ WHERE INSTR(FIRST_NAME,'ll') >0 ; 
+ -- display the last character of the name which has vowels as the last character.
+SELECT FIRST_NAME, LAST_NAME , SUBSTR(LAST_NAME,LENGTH(LAST_NAME))AS LAST_CHAR  
+ FROM EMPLOYEES
+WHERE SUBSTR(last_name,LENGTH(last_name)) IN ('a','e','i','o','u');
+
+-- MOD function
+SELECT salary ,TRUNC(salary/500,0) as notes_500 ,RPAD(salary, 10, '*'), -- RPAD gives the character right padded.
+ MOD(salary,500)as remaining_sal FROM employees -- MOD gives the remainder -- denomination in terms of 500
+where employee_id < 111 ;
+
+
+SELECT  Next_day(SYSDATE , 'Mon'),last_day(SYSDATE) from dual; -- next monday date
+
+SELECT ROUND(SYSDATE) FROM DUAL; -- it changes after afternoon
+
+SELECT employee_id , first_name , hire_date 
+FROM employees
+where TRUNC(hire_date) = '07-DEC-2007'; -- TRUNC gves the date as date not time stamp
+
+SELECT employee_id , first_name , hire_date 
+FROM employees
+where (hire_date) > '17 - JUN-2007';
+
+SELECT TO_CHAR (SYSDATE , 'DD-Mon-YYYY HH:MI:SS AM ') FROM DUAL;
+
+SELECT employee_id , first_name , TO_CHAR (HIRE_DATE , 'DD-Mon-YYYY HH24:MI:SS AM ') 
+FROM employees
+where TRUNC(hire_date) = TO_DATE( '17/06/03' , 'DD/MM/YY');
+
+-- to-date we use in where clause, to_char we use in select clause for displaying.
+
+-- IF-ELSE LOOP
+SELECT last_name, job_id, salary,
+       CASE job_id WHEN 'IT_PROG'  THEN  1.10*salary
+                   WHEN 'ST_CLERK' THEN  1.15*salary
+                   WHEN 'SA_REP'   THEN  1.20*salary
+       ELSE      salary
+       END AS "REVISED_SALARY"
+	FROM   Employees;  -- END IS USED TO END THE LOOP , AS MEANS THE FIELD REPRESENTED 
+-- in above code 
+
+SELECT last_name, job_id, salary,
+       DECODE( job_id,   'IT_PROG'  ,1.10*salary,
+                    'ST_CLERK' ,  1.15*salary,
+                   'SA_REP'   ,  1.20*salary,
+       salary )
+       AS "REVISED_SALARY"
+	FROM   Employees;
+    
+    -- case can be extended to write comparison statements like the following which can't be done in the case of decode
+SELECT last_name, job_id, salary,
+       CASE 
+                 WHEN job_id ='IT_PROG'  THEN  1.10*salary
+                   WHEN salary < 5000 THEN  1.15*salary
+                   WHEN job_id ='SA_REP'   THEN  1.20*salary
+       ELSE      salary
+       END AS "REVISED_SALARY"
+	FROM   Employees
+    
+      -- END IS USED TO END THE LOOP , AS MEANS THE FIELD REPRESENTED 
+-- in above code if when condition is satisfied , then it doesn't go for next when, as like in if-else loop
+
+SELECT last_name, department_id, salary,
+       DECODE( department_id,   20  THEN  1.10*salary,
+                    30 THEN  1.15*salary,
+                    50 THEN  1.20*salary,
+                    salary )AS "REVISED_SALARY"
+	FROM   Employees
+    ORDER BY 2;
+    
+SELECT  DEPARTMENT_ID ,JOB_ID, SUM(SALARY) , ROUND(AVG(SALARY),2) , MEDIAN(SALARY) , ROUND(STDDEV(SALARY),2),
+ROUND(VARIANCE(salary),2) , SQRT(VARIANCE(salary))
+FROM EMPLOYEES 
+WHERE DEPARTMENT_ID IN (40,50,60)
+GROUP BY DEPARTMENT_ID,JOB_ID
+ORDER BY DEPARTMENT_ID,JOB_ID;
+
+
+
+SELECT  DEPARTMENT_ID ,JOB_ID, SUM(SALARY)AS TOT_SAL , ROUND(AVG(SALARY),2)AS AVG_SAL ,COUNT(*)AS EMP_COUNT-- ,MEDIAN(SALARY) , ROUND(STDDEV(SALARY),2),
+--ROUND(VARIANCE(salary),2) , SQRT(VARIANCE(salary))
+FROM EMPLOYEES 
+GROUP BY DEPARTMENT_ID,JOB_ID -- GROUP BY INVOLVES A SORTING OPERATION FOR CALCULATION BUT FOR DISPLAYING IT , WE NEED TO USE ORDER BY
+
+ORDER BY DEPARTMENT_ID,JOB_ID;
+-- COUNT(*) GIVES THE COUNT BASED ON THE SPECIFIED GROUP BY DATA.
+-- IF WE WANT TO DISPLAY JOB_ID , WE NEED TO ORDER BY JOB_D TOO. 
+
+SELECT DISTINCT DEPARTMENT_ID, JOB_ID FROM EMPLOYEES
+ORDER BY 1,2;
+
+
+-- IF WE WANT DATA WITH EMP COUNT > 1
+-- THE COUNT IS EXECUTED ONLY AFTER GROUPING IS DONE.
+SELECT  DEPARTMENT_ID ,JOB_ID, SUM(SALARY)AS TOT_SAL , ROUND(AVG(SALARY),2)AS AVG_SAL ,COUNT(*)AS EMP_COUNT-- ,MEDIAN(SALARY) , ROUND(STDDEV(SALARY),2),
+--ROUND(VARIANCE(salary),2) , SQRT(VARIANCE(salary))
+FROM EMPLOYEES 
+GROUP BY DEPARTMENT_ID,JOB_ID -- GROUP BY INVOLVES A SORTING OPERATION FOR CALCULATION BUT FOR DISPLAYING IT , WE NEED TO USE ORDER BY
+HAVING COUNT(*) > 1
+AND ROUND(AVG(SALARY),2) > 3000
+ORDER BY DEPARTMENT_ID,JOB_ID;
+-- WHILE ACCESSING HE OPERATIONS , WE CAN'T USE THE ALIAS I.E., THA NAMES / FIELDS CREATED , WE NEED TO SPECIFY THE FORMULA
+-- 'HAVING' IS SIMILAR TO WHERE , HAVING GET'S APPLIES AFTER GROUPING, .. WHEN GROUPING IS DONE , WE NEED TO USE HAVING.
+
+
+--- WE CAN ALSO HAVE A WHERE CLAUSE HERRE. IT SHOULD BE USED BEFORE THE GROUP BY
+SELECT  DEPARTMENT_ID ,JOB_ID, SUM(SALARY)AS TOT_SAL , ROUND(AVG(SALARY),2)AS AVG_SAL ,COUNT(*)AS EMP_COUNT
+FROM EMPLOYEES 
+WHERE JOB_ID NOT LIKE 'SA%'
+GROUP BY DEPARTMENT_ID,JOB_ID 
+HAVING COUNT(*) > 1
+AND ROUND(AVG(SALARY),2) > 3000
+ORDER BY DEPARTMENT_ID,JOB_ID;
+    
+-- ALL GROUP BY FUNCTIONS IGNORE NULL VALUES
+
+SELECT COUNT(*) , COUNT(DEPARTMENT_ID) , COUNT(COMMISSION_PCT)  -- COUNT (*) MEANS THE PRIMARY KEY
+FROM EMPLOYEES;
+
+SELECT COUNT(DISTINCT DEPARTMENT_ID)
+FROM EMPLOYEES;
+
+SELECT DEPARTMENT_ID, JOB_ID,COUNT(JOB_ID) 
+FROM EMPLOYEES
+GROUP BY DEPARTMENT_ID , JOB_ID
+ORDER BY 1,2;
+
+--- IN CASE WE NEED TO COUNT NULL VALUES AS 0'S AND GIVE THE TOTAL COUNT , WE USE NVL
+
+SELECT  COUNT(COMMISSION_PCT) ,COUNT(NVL(COMMISSION_PCT,0)) 
+FROM EMPLOYEES
+
+-- IF WE WANT , THE INDIVIDUAL JOB WISE COUNT AND DEPARTMENT WISE COUNT WHICH GIVES NULL, WE REPLACE THE NULL WITH DEPT TOTAL , WE USE NVL FOR THAT 
+SELECT DEPARTMENT_ID,NVL( JOB_ID,'== DEPT.TOTAL=='),COUNT(JOB_ID) 
+FROM EMPLOYEES
+GROUP BY ROLLUP(DEPARTMENT_ID , JOB_ID)
+ORDER BY 1;
+-- AT LAST WHILE ORDERING WE SPECIFY 1 SO THAT DEPT WISE TOTAL IS SPECIFIED AT LAST.
+
+SELECT DEPARTMENT_ID,NVL( JOB_ID,'== DEPT.TOTAL=='), NVL( TO_CHAR(HIRE_DATE,'DD-Mon-YY'),'HIRE_DAY_TOTAL'), COUNT(DEPARTMENT_ID) 
+FROM EMPLOYEES
+GROUP BY CUBE(DEPARTMENT_ID , JOB_ID,hire_date)
+ORDER BY 1; -- 
+
+
+SELECT EMPLOYEE_ID,E.JOB_ID, JOB_TITLE
+FROM EMPLOYEES E INNER JOIN JOBS J
+ON(E.JOB_ID = J.JOB_ID ) -- JOINING THROUGH JOB_ID 
+WHERE EMPLOYEE_ID < 111
+-- NULL CANNOT BE COMPARED , SO THE OBSERVATIONS WITH NO NULL VALUES ARE OBTAINED.
+-- IN CASE OF JOINING N TABLES WE NEED N-1 CONDITIONSS
+-- IS SAME AS 
+
+SELECT EMPLOYEE_ID,E.JOB_ID, JOB_TITLE
+FROM EMPLOYEES E , JOBS J
+WHERE  E.JOB_ID = J.JOB_ID  -- JOINING THROUGH JOB_ID (COMMON COLUMN I.E., COLUMN NAMES NEED NOT BE SAME, BUT COLUMN ENTITIES SHOULD BE SAME) 
+AND  EMPLOYEE_ID < 111
+
+-- CARTESIAN JOIN  (PRODUCT/COMBINATIONS)
+SELECT EMPLOYEE_ID , E.DEPARTMENT_ID , D.DEPARTMENT_NAME
+FROM EMPLOYEES E, DEPARTMENTS D
+-- IS SAME AS 
+SELECT COUNT(*)
+FROM EMPLOYEES E CROSS JOIN JOBS J
+
+-- INNER JOIN USING MULTIPLE TABLES
+SELECT EMPLOYEE_ID,E.JOB_ID, JOB_TITLE,D.DEPARTMENT_ID
+FROM EMPLOYEES E
+  INNER JOIN JOBS J
+     ON(E.JOB_ID = J.JOB_ID ) -- JOINING THROUGH JOB_ID 
+  INNER JOIN DEPARTMENTS D
+     ON(E.DEPARTMENT_ID = D.DEPARTMENT_ID)
+WHERE EMPLOYEE_ID < 500;
+-- WHILE STRING COMPARISON , USE UPPER / LOWER/INITCAP ON BOTH SIDES (ENSURE U SPECIFY THE SAME CONDITION ON BOTH SIDES.)
+
+
+SELECT EMPLOYEE_ID,E.DEPARTMENT_ID,CITY
+FROM DEPARTMENTS D
+  INNER JOIN EMPLOYEES E
+     ON(E.DEPARTMENT_ID = D.DEPARTMENT_ID ) 
+  INNER JOIN LOCATIONS L
+     ON(L.LOCATION_ID= D.LOCATION_ID)
+WHERE EMPLOYEE_ID < 500;
+
+-- IN OTHER WAY
+SELECT EMPLOYEE_ID,E.DEPARTMENT_ID,CITY
+FROM EMPLOYEES E,DEPARTMENTS D, LOCATIONS L
+WHERE E.DEPARTMENT_ID = D.DEPARTMENT_ID
+AND D.LOCATION_ID = L.LOCATION_ID
+AND EMPLOYEE _ID <111;
+
+-- COUNT OF EMPLOYEES IN EACH DEPARTMENT
+SELECT DEPARTMENT_NAME , COUNT(EMPLOYEE_ID) AS EMP_COUNT 
+FROM DEPARTMENTS D , EMPLOYEES E 
+WHERE D.DEPARTMENT_ID = E.DEPARTMENT_ID 
+GROUP BY DEPARTMENT_NAME 
+ORDER BY EMP_COUNT DESC;
+-- ABOVE RESULT GIVES THE DEPARTMENTS WITH NON-NULL EMPLOYEES
+
+-- TOTAL DEPARTMENTS
+SELECT * FROM DEPARTMENTS ;
+
+-- FOR GETTING TOTAL DEPARTMENTS , WE NEEE DOT USE , LEFT OUTER JOIN
+SELECT D.DEPARTMENT_ID ,DEPARTMENT_NAME, COUNT(EMPLOYEE_ID) AS EMP_COUNT 
+FROM DEPARTMENTS D LEFT OUTER JOIN EMPLOYEES E 
+ON( D.DEPARTMENT_ID = E.DEPARTMENT_ID )
+GROUP BY D.DEPARTMENT_ID ,DEPARTMENT_NAME
+ORDER BY DEPARTMENT_ID DESC;
+
+SELECT D.DEPARTMENT_ID ,DEPARTMENT_NAME,e.employee_id ,COUNT(EMPLOYEE_ID) AS EMP_COUNT 
+FROM DEPARTMENTS D FULL OUTER JOIN EMPLOYEES E 
+ON( D.DEPARTMENT_ID = E.DEPARTMENT_ID )
+GROUP BY D.DEPARTMENT_ID ,DEPARTMENT_NAME ,e.employee_id
+ORDER BY DEPARTMENT_ID DESC;
+
+
+
+select employee_id
+from employees union select department_id from departments;
+
+
+select employee_id , salary*1.2 as annual_sal
+from employees
+where annual_sal >10000;
+
+-- IS SAME AS 
+SELECT D.DEPARTMENT_ID ,DEPARTMENT_NAME, COUNT(EMPLOYEE_ID) AS EMP_COUNT 
+FROM DEPARTMENTS D ,EMPLOYEES E 
+WHERE( D.DEPARTMENT_ID = E.DEPARTMENT_ID (+)) -- FOR LEFT OUTER JOIN , WE PUT + ON THE RIGHT SIDE AND FOR THE RIGHT OUTER JOIN , WE PUT + ON THE LEFT SIDE
+GROUP BY D.DEPARTMENT_ID ,DEPARTMENT_NAME
+ORDER BY DEPARTMENT_ID DESC;
+
+---
+SELECT CITY , NVL(DEPARTMENT_NAME , 'NO.DEPT')
+FROM DEPARTMENTS D , LOCATIONS L 
+WHERE D.LOCATION_ID(+) = L.LOCATION_ID;
+
+--
+SELECT CITY , NVL(DEPARTMENT_NAME , 'NO.DEPT')
+FROM DEPARTMENTS D RIGHT OUTER JOIN  LOCATIONS L 
+ON D.LOCATION_ID(+) = L.LOCATION_ID;
+
+---
+SELECT EMPLOYEE_ID,D.DEPARTMENT_ID ,DEPARTMENT_NAME , E.JOB_ID
+FROM EMPLOYEES E FULL OUTER JOIN DEPARTMENTS D
+ON (E.DEPARTMENT_ID = D.DEPARTMENT_ID ) 
+
+---
+
+ SELECT * FROM SHIPPER
+ SELECT * FROM ONLINE_CUSTOMER
+  SELECT * FROM ORDER_HEADER
+   SELECT * FROM  ORDER_ITEMS
+   
+
+-- THE EXERCISE GIVEN
+SELECT O.ORDER_ID , C.CUSTOMER_FNAME || ' '||C.CUSTOMER_LNAME AS CUST_FULL_NAME , P.PRODUCT_DESC , (OI.PRODUCT_QUANTITY *P.PRODUCT_PRICE) AS SUB_TOTAL  
+FROM ORDER_HEADER O , ONLINE_CUSTOMER C , PRODUCT P ,ORDER_ITEMS OI
+WHERE O.CUSTOMER_ID = C.CUSTOMER_ID 
+AND  O.ORDER_ID = OI.ORDER_ID 
+AND OI.PRODUCT_ID = P.PRODUCT_ID 
+AND O.ORDER_ID = 10020;
+
+
+
+SELECT O.ORDER_ID , C.CUSTOMER_FNAME || ' '||C.CUSTOMER_LNAME AS CUST_FULL_NAME , P.PRODUCT_DESC , (OI.PRODUCT_QUANTITY *P.PRODUCT_PRICE) AS SUB_TOTAL  
+FROM ORDER_HEADER O LEFT OUTER JOIN ONLINE_CUSTOMER C 
+ON(O.CUSTOMER_ID = C.CUSTOMER_ID(+) )
+FROM ORDER_HEADER O LEFT OUTER JOIN ORDER_ITEMS OI
+ON(O.ORDER_ID = OI.ORDER_ID(+))
+FROM ORDER_ITEMS OI LEFT OUTER JOIN PRODUCT P 
+ON(OI.PRODUCT_ID = P.PRODUCT_ID(+))
+WHERE O.ORDER_ID = 10020;
+
+
+
+-- 2.List the product description, class description and price of all products which are shipped.
+SELECT P.PRODUCT_DESC , PC.PRODUCT_CLASS_DESC , P.PRODUCT_PRICE , O.ORDER_STATUS
+FROM ORDER_HEADER O , PRODUCT P  , PRODUCT_CLASS PC , ORDER_ITEMS OI
+WHERE p.product_class_code =  PC.PRODUCT_CLASS_CODE
+AND O.ORDER_ID = oi.order_id
+AND oi.product_id = P.PRODUCT_ID
+AND ORDER_STATUS LIKE 'Shipped'
+
+--3. List details of customers who have not placed any order.
+select c.CUSTOMER_ID ,count(o.ORDER_ID) AS NO_ORDERS
+FROM ORDER_HEADER O RIGHT OUTER JOIN ONLINE_CUSTOMER C 
+ON(O.CUSTOMER_ID(+) = C.CUSTOMER_ID )
+GROUP BY   C.CUSTOMER_ID  
+HAVING COUNT(O.ORDER_ID) = 0
+
+-- 4. List customer name, email and order details (order id, product desc, qty, subtotal) for all customers even if they have not ordered any item.
+SELECT   C.CUSTOMER_ID , C.CUSTOMER_FNAME ||' '||C.CUSTOMER_LNAME AS CUSTOMER_NAME,  C.CUSTOMER_EMAIL ,O.ORDER_ID,  P.PRODUCT_DESC ,OI.PRODUCT_QUANTITY, (OI.PRODUCT_QUANTITY *P.PRODUCT_PRICE) AS SUB_TOTAL
+FROM ORDER_ITEMS OI RIGHT OUTER JOIN ONLINE_CUSTOMER C 
+ON(OI.CUSTOMER_ID(+) = C.CUSTOMER_ID )
+FROM PRODUCT P LEFT OUTER JOIN ORDER_ITEMS OI
+ON OI.PRODUCT_ID = P.PRODUCT_ID (+)
+GROUP BY   C.CUSTOMER_EMAIL 
+ORDER BY CUST_FULL_NAME ;
+HAVING COUNT(O.ORDER_ID) = 0;
+
+
+SELECT  C.CUSTOMER_ID,C.CUSTOMER_FNAME || ' '||C.CUSTOMER_LNAME AS CUST_FULL_NAME ,C.CUSTOMER_EMAIL,NVL(O.ORDER_ID,0), P.PRODUCT_DESC ,NVL( OI.PRODUCT_QUANTITY,0) ,NVL((OI.PRODUCT_QUANTITY *P.PRODUCT_PRICE),0) AS SUB_TOTAL  
+FROM ORDER_HEADER O RIGHT OUTER JOIN ONLINE_CUSTOMER C 
+ON(O.CUSTOMER_ID(+) = C.CUSTOMER_ID )
+FROM ORDER_ITEMS OI INNER JOIN ORDER_HEADER O 
+ON (OI.ORDER_ID = O.ORDER_ID )
+FROM ORDER_ITEMS OI INNER JOIN PRODUCT P 
+ON (OI.PRODUCT_ID = P.PRODUCT_ID )
+GROUP BY C.CUSTOMER_ID ;
+
+ORDER BY CUST_FULL_NAME ;
+
+--1. Display the product details as per the following criteria and sort them in descending order of category:
+--a. If the category is 2050, increase the price by 2000
+--b. If the category is 2051, increase the price by 500
+--c. If the category is 2052, increase the price by 600
+
+SELECT product_class_code AS category,product_price,
+    CASE product_class_code
+        WHEN 2050 THEN product_price+2000
+        WHEN 2051 THEN product_price+500
+        WHEN 2052 THEN product_price+600
+    ELSE product_price END AS "Updated_product_price"
+FROM product
+ORDER BY CATEGORY DESC;
+
+-- 4. List customer name, email and order details (order id, product desc, qty, subtotal) for all customers even if they have not ordered any item.
+SELECT   C.CUSTOMER_ID , C.CUSTOMER_FNAME ||' '||C.CUSTOMER_LNAME AS CUSTOMER_NAME,  C.CUSTOMER_EMAIL ,O.ORDER_ID --,  P.PRODUCT_DESC ,OI.PRODUCT_QUANTITY, (OI.PRODUCT_QUANTITY *P.PRODUCT_PRICE) AS SUB_TOTAL
+FROM ORDER_HEADER O RIGHT OUTER JOIN ONLINE_CUSTOMER C 
+ON(O.CUSTOMER_ID(+) = C.CUSTOMER_ID )
+GROUP BY  C.CUSTOMER_ID 
+WHERE COUNT(ORDER_ID) IS NULL 
+OR COUNT(ORDER_ID) IS NOT NULL ;
+
+
+
+
+-- display manager name of an employee (SELF JOIN)
+SELECT E.EMPLOYEE_ID , E.FIRST_NAME , E.LAST_NAME , E.MANAGER_ID , M.FIRST_NAME , M.LAST_NAME
+FROM EMPLOYEES E , EMPLOYEES M 
+WHERE E.EMPLOYEE_ID = M.EMPLOYEE_ID; 
+
+
+-- list the peers of charles johnson (here peer means same department_id)  (Another example of self join)
+SELECT e.employee_id , p.first_name , p.last_name ,p.job_id , p.department_id
+FROM EMPLOYEES E , EMPLOYEES P
+WHERE e.FIRST_NAME = 'Charles'
+and e.last_name = 'Johnson'
+and p.FIRST_NAME != e.FIRST_NAME
+and p.last_name != e.last_name
+and e.job_id = p.job_id
+AND e.department_id = p.department_id ;
+
+--Query to get a UNION of all types of managers
+SELECT e.employee_id, e.first_name,J.JOB_ID, j.job_title, d.department_name
+FROM Employees e, Jobs j, Departments d
+WHERE (j.job_id LIKE '%_MAN' OR j.job_id LIKE '%_MGR')
+AND e.job_id = j.job_id
+AND e.department_id = d.department_id
+UNION ALL  -- GIVES DUPLICATES ALSO
+-- UNION  - GIVES BASED ON COMMON FEATURES.
+SELECT e.employee_id, e.first_name,J.JOB_ID, j.job_title, d.department_name
+FROM Employees e, Departments d, Jobs j
+WHERE e.employee_id = d.manager_id
+AND e.job_id = j.job_id;
+
+
+
+-- ANALYTIC FUNCTIONS (ALSO CALLED WINDOWING FUNCTIONS) WHICH ARE UNLIKE AGGREGATE FUNCTONS , WHICH REDUCS NO. OF ROWS
+SELECT last_name, department_id, 
+COUNT(*) OVER (PARTITION BY department_id) dept_cnt -- IF WE DON'T SPECIFY PARTITION BY , THE TOTAL TABLE IS CONSIDERED A S ONE AND ALL THE ENTITIES ARE COUNTED AND DISPLAYED
+FROM Employees;
+---
+SELECT last_name, department_id, JOB_ID,
+COUNT(*) OVER (PARTITION BY JOB_id) JOB_cnt -- IF WE DON'T SPECIFY PARTITION BY , THE TOTAL TABLE IS CONSIDERED A S ONE AND ALL THE ENTITIES ARE COUNTED AND DISPLAYED
+FROM Employees;
+
+-- AGGREGATING FOR THE SAME PROBLEM
+SELECT  DEPARTMENT_ID , COUNT(*) AS DEPT_CNT 
+FROM EMPLOYEES
+GROUP BY DEPARTMENT_ID;
+---
+SELECT last_name, department_id, SALARY AS PERSON_SALARY , 
+SUM(SALARY) OVER (PARTITION BY department_id)DEPT_TOTAL_SALARY ,-- IF WE DON'T SPECIFY PARTITION BY , THE TOTAL TABLE IS CONSIDERED A S ONE AND ALL THE ENTITIES ARE COUNTED AND DISPLAYED
+ROUND(SALARY * 100 / SUM(SALARY)OVER (PARTITION BY DEPARTMENT_ID),2) AS PCT_SAL
+FROM Employees;
+--- COUNT AS PER DEPT AND PERCENT DEPT COUNT 
+SELECT last_name, department_id, 
+COUNT(*) OVER (PARTITION BY department_id) DEPT_CNT ,
+COUNT(*) OVER () AS TOTAL_CNT , -- HERRE THE TOTAL TABLE IS CONSIDEREED AS ONE PARTITION
+ROUND((COUNT(*) OVER (PARTITION BY department_id)) * 100 / (COUNT(*) OVER ()),2) AS PCT_CNT
+FROM Employees;
+
+select count(employee_id) from employees;
+
+-- SELECT COUNT(*) FROM EMPLOYEES
+
+SELECT EMPLOYEE_ID , LAST_NAME , ROUND( AVG(SALARY)
+OVER (PARTITION BY DEPARTMENT_ID),2 ) AS DEPT_AVG , DEPARTMENT_ID
+FROM EMPLOYEES
+WHERE DEPARTMENT_ID IN (30,40,50);
+
+
+
+
+-- Analytic functions do not reduce the no. of rows unlike GROUP BY clause
+
+-- Count over both dept ids 50 & 80
+SELECT employee_id, department_id, COUNT(*) OVER () dept_cnt
+FROM Employees
+WHERE department_id IN (50, 80);
+
+-----------------------------------
+-- Count over each dept id 50 & 80
+-----------------------------------
+SELECT employee_id, department_id, 
+COUNT(*) OVER (PARTITION BY department_id) dept_cnt
+FROM Employees
+WHERE department_id IN (50, 80);
+
+-----------------------------------
+-- Count of both dept ids 50 & 80
+-----------------------------------
+
+SELECT COUNT(*) OVER() FROM Employees WHERE department_id IN (50, 80);
+
+-----------------------------------
+-- ROW_NUMBER function to get serial no.s in a partition
+-----------------------------------
+SELECT employee_id, first_name,LAST_NAME, job_id, department_id, 
+ROW_NUMBER() OVER (PARTITION BY department_id ORDER BY HIRE_DATE ) dept_sl
+FROM Employees
+WHERE department_id IN (50, 80);
+---
+SELECT employee_id, first_name,LAST_NAME, job_id, department_id, 
+ROW_NUMBER() OVER (PARTITION BY department_id ORDER BY SALARY DESC) dept_sl
+FROM Employees
+WHERE department_id IN (50, 80);
+-- HERE THE RESULTS ARE ORDERED BY THE HIRE DATE , SO THE PERSON WHO JOINED THE EARLIEST IS DISPLAYED ABOVE.
+-- ROW NUMBER REQUIRES ORDER BY 
+-----------------------------------
+-- RANK and DENSE_RANK
+-----------------------------------
+SELECT employee_id, first_name, job_id, salary, 
+RANK() OVER (PARTITION BY department_id ORDER BY salary DESC) rank,
+DENSE_RANK() OVER (PARTITION BY department_id ORDER BY salary DESC) dense_rank
+FROM Employees
+WHERE department_id IN (50, 80);
+
+-----------------------------------
+-- LEAD and LAG
+-- LEAD computes an expression based on the next rows
+-- i.e. rows coming after the current row) and return value to current row
+-- LEAD (expr, offset, default)
+-- expr = expression to compute from leading row
+-- offset = index of the leading row relative to the current row
+-- default = value to return if the <offset> points to a row beyond partition range
+-----------------------------------
+SELECT employee_id, first_name,DEPARTMENT_ID, job_id, salary, 
+LEAD(salary, 1, 0) OVER (PARTITION BY department_id ORDER BY salary DESC NULLS LAST) next_lower_sal,
+LAG(salary, 1, 0) OVER (PARTITION BY department_id ORDER BY salary DESC) prev_higher_sal
+FROM Employees
+WHERE department_id IN (50, 80);
+
+-- CORR is used to calculate the coefficient of correlation (Pearson correlation coefficient)
+SELECT employee_id, last_name,DEPARTMENT_ID, job_id, salary , HIRE_DATE,
+ROUND(CORR(SYSDATE - hire_date, salary) OVER (PARTITION BY DEPARTMENT_ID) ,4)  AS corr_val
+FROM   employees;
+-- IF HIRE_DATE IS SAME IN ONE PARTITION AND MORE THAN 1 OBS ARE THERE, CORR VALUE WILL BE 0 SINCE ONE ENTITY IS SAME AND OTHER IS MOVING.
+-- IF ONLY ONE OBS IS THERE, CORR VALUE IS NULL.
+-- CORR DOESN'T  WORK FOR GROUP BY
+
+SELECT employee_id, last_name, job_id, salary , HIRE_DATE,
+ROUND(CORR( salary , COMMISSION_PCT) OVER () ,2)  AS corr_val
+FROM   employees;
+-----------------------------------
+-- FIRST_VALUE and LAST_VALUE
+-- FIRST_VALUE returns the first result from an ordered set.
+-- How many days after the first hire of each dept were the next employees hired?
+-----------------------------------
+SELECT employee_id, first_name, DEPARTMENT_ID, job_id, hire_date - FIRST_VALUE(hire_date) 
+OVER (PARTITION BY department_id ORDER BY hire_date) day_gap
+FROM Employees
+WHERE department_id IN (30,50, 80)
+ORDER BY department_id, day_gap;
+
+-- FIRST VALUE & LAST VALUE REQUIRE PARTITION AND ORDER BY
+-----------------------------------
+-- FIRST and LAST
+-----------------------------------
+SELECT department_id,
+MIN(salary) KEEP (DENSE_RANK FIRST ORDER BY salary) "MIN SAL", 
+MAX(salary) KEEP (DENSE_RANK LAST ORDER BY salary) "MAX SAL" 
+FROM Employees 
+GROUP BY department_id;
+
+-----------------------------------
+-- Yearwise avg salary of employees
+-----------------------------------
+SELECT employee_id, department_id, TO_CHAR(hire_date,'YYYY') HIRE_YR, salary,
+(
+  AVG(salary) KEEP (DENSE_RANK FIRST ORDER BY TO_CHAR(hire_date,'YYYY'))
+  OVER (PARTITION BY department_id)
+) AS avg_sal_yr1_hire
+FROM Employees
+WHERE department_id IN (50, 80)   
+ORDER BY HIRE_YR, department_id, employee_id;
+
+-----------------------------------
+LISTAGG - Produce a comma separated emp names for each department
+-----------------------------------
+SELECT department_id,COUNT(*),
+LISTAGG(first_name, ',') WITHIN GROUP (ORDER BY first_name) AS employees
+FROM   employees
+GROUP BY department_id
+ORDER BY department_id;
+
+-----------------------------------
+-- RATIO_TO_REPORT - Ratio of the specified value to the sum of values in the set
+-----------------------------------
+SELECT employee_id, first_name, department_id, salary,
+SUM(salary) OVER(PARTITION BY DEPARTMENT_ID) AS DEPT_total_sal,
+       ROUND(RATIO_TO_REPORT(salary) OVER (PARTITION BY DEPARTMENT_ID),2) AS r2r_sal
+FROM   employees
+WHERE department_id IN (10, 20, 30)
+ORDER BY salary;
+
+-----------------------------------
+-- CUME_DIST - display the cumulative distribution, or the relative position in the set, of each of the employees, as well as all the original data.
+-----------------------------------
+SELECT employee_id, first_name, department_id, salary,
+       ROUND(CUME_DIST() OVER (PARTITION BY DEPARTMENT_ID  ORDER BY salary DESC),4) AS cume_dist_sal
+FROM   employees;
+
+
+--SELECT department_id, salary,
+       ROUND(CUME_DIST(SALARY) WITHIN GROUP  (ORDER BY salary DESC ),4) AS cume_dist_sal
+FROM   employees
+GROUP BY DEPARTMENT_ID 
+ 
+-----------------------------------
+-- NTILE - Breaks a result set into a specified number of approximately equal groups, or buckets, rows permitting. 
+-- If the no. of rows in the set is smaller than the number of buckets specified, 
+-- the number of buckets will be reduced so there is one row per bucket.
+-----------------------------------
+SELECT employee_id, first_name, department_id, salary,COUNT(*) OVER (PARTITION BY  department_id),
+SUM(salary) OVER() AS total_sal,
+       NTILE(5) OVER (PARTITION BY  department_id ORDER BY salary) AS quantile
+FROM   employees
+ORDER BY DEPARTMENT_ID;
+
+
+
+
+SELECT DEPARTMENT_ID , NVL(JOB_ID, '**DEPT.TOTAL**' ), SUM(SALARY)
+FROM EMPLOYEES
+WHERE DEPARTMENT_ID IS NOT NULL
+GROUP BY CUBE(DEPARTMENT_ID , JOB_ID)
+ORDER BY DEPARTMENT_ID , JOB_ID ;
+
+SELECT DEPARTMENT_ID , NVL(JOB_ID, '**DEPT.TOTAL**' ), to_char(hire_date,'yyyy')as yr_joined,SUM(SALARY)
+FROM EMPLOYEES
+WHERE DEPARTMENT_ID IS NOT NULL
+GROUP BY CUBE(DEPARTMENT_ID , JOB_ID,to_char(hire_date,'yyyy'))
+ORDER BY DEPARTMENT_ID , JOB_ID ;
+
+-- dept wise salary sum and job wise salary sum
+SELECT DEPARTMENT_ID , JOB_ID,SUM(SALARY),
+grouping_id(department_id,job_id) as grouping_id
+FROM EMPLOYEES
+WHERE DEPARTMENT_ID IS NOT NULL
+GROUP BY grouping sets(department_id , job_id , null)
+ORDER BY DEPARTMENT_ID , JOB_ID ;
+
+
+
+---
+select 
+case grouping(department_id)
+  when 0 then to_char (department_id)
+  when 1 then '==All depts=='
+  end department_id,
+case grouping(job_id)
+  when 0 then (job_id)
+  when 1 then '==All jobs=='
+  end job_id,  
+  SUM(SALARY) TOTAL_SAL 
+  FROM EMPLOYEES
+  -- WHERE DEPARTMENT_ID IN (50,60,90,100)
+  GROUP BY CUBE(DEPARTMENT_ID , JOB_ID)
+  ORDER BY DEPARTMENT_ID , TOTAL_SAL;
+
+----
+SELECT FIRST_NAME , LAST_NAME, SALARY ,
+CASE 
+  WHEN SALARY = (SELECT MAX(SALARY) FROM EMPLOYEES) THEN 'MAX SAL'
+  WHEN SALARY = (SELECT MIN(SALARY) FROM EMPLOYEES) THEN 'MIN SAL'
+  END AS SAL_GRAD
+FROM EMPLOYEES 
+WHERE SALARY = (SELECT MAX(SALARY) FROM EMPLOYEES) 
+OR SALARY = (SELECT MIN(SALARY) FROM EMPLOYEES) 
+
+
+
+SELECT  DEPARTMENT_ID, SALARY
+FROM EMPLOYEES E1
+   WHERE   SALARY =( SELECT  MAX (SALARY) FROM EMPLOYEES E2
+    WHERE E1.DEPARTMENT_ID = E2.DEPARTMENT_ID)
+ORDER BY DEPARTMENT_ID ;
+ 
+  SELECT DEPARTMENT_ID , MAX(SALARY) FROM EMPLOYEES E2 GROUP BY DEPARTMENT_ID
+  ORDER BY DEPARTMENT_ID -- THESE ARE CALLED CORRELATED SUB QUERIES.
+  
+  ----
+  SELECT FIRST_NAME, LAST_NAME FROM EMPLOYEES
+  WHERE SALARY = ( SELECT  MAX (SALARY) FROM EMPLOYEES ) -- IT IS INDEPENDENT QUERY.
+  ----
+  SELECT D.DEPARTMENT_ID ,D.DEPARTMENT_NAME, COUNT(E.EMPLOYEE_ID) 
+  FROM DEPARTMENTS D , EMPLOYEES E
+  WHERE D.DEPARTMENT_ID = E.DEPARTMENT_ID(+) -- LEFT OUTER JOIN
+  GROUP BY D.DEPARTMENT_ID ,D.DEPARTMENT_NAME
+  HAVING COUNT(EMPLOYEE_ID) =0 
+  ORDER BY 1
+  
+  
+  
+   --- USING SUB QUERY (IT IS COMPUTATIONALLY FAST)
+   SELECT D.DEPARTMENT_ID , D.DEPARTMENT_NAME 
+   FROM DEPARTMENTS D
+   --WHERE D.DEPARTMENT_ID IN (SELECT DEPARTMENT_ID FROM EMPLOYEES) --DEPARTMENTS WHERE EMPLOYEES ARE THERE
+   WHERE D.DEPARTMENT_ID IN (SELECT DEPARTMENT_ID FROM EMPLOYEES 
+   WHERE DEPARTMENT_ID IS NOT NULL)
+   ORDER BY DEPARTMENT_ID;--DEPARTMENTS WHERE EMPLOYEES ARE NOT THERE
+   -- OR 
+  -- USING NVL  
+  SELECT D.DEPARTMENT_ID , D.DEPARTMENT_NAME 
+  FROM DEPARTMENTS D
+  WHERE D.DEPARTMENT_ID NOT IN ((SELECT NVL(DEPARTMENT_ID,0) FROM EMPLOYEES ))
+  ORDER BY DEPARTMENT_ID;
+  
+  -- NEED TO FIND  DUPLICATE FIRST_NAME
+  SELECT FIRST_NAME , COUNT(*) AS DUP_COUNT
+  FROM EMPLOYEES
+  GROUP BY FIRST_NAME
+  HAVING COUNT(*) > 1
+  ORDER BY DUP_COUNT DESC ;
+  
+  -----
+  select employee_id from employees where MOD(employee_id,2)=1;
+  
+  
+  SELECT last_name, job_id, salary
+	FROM   Employees
+	WHERE  job_id = ANY(SELECT job_id FROM   Employees
+                 WHERE  last_name = 'Smith')
+	AND    salary > all(SELECT salary FROM   Employees
+                 WHERE  last_name = 'Smith');
+
+  -- ANY , ALL ARE TO BE USED PROPERLY WHEN NEEDED. THESE SHOULD BE USED IF THE INNER QUERY IS MULTI ROW.
+  -- INDEPENDENT VS CORRELATED QUERIES NEEDS TO BE UNDERSTOOD CLEARLY
+-----------------------------------
+
+-- NTH_VALUE - Shows the Nth value from either FIRST or LAST
+-----------------------------------
+SELECT employee_id, first_name, department_id, salary,
+       NTH_VALUE(salary, 3) FROM FIRST OVER 
+            (PARTITION BY department_id ORDER BY salary) AS third_lowest_sal,
+       NTH_VALUE(salary, 3) FROM LAST OVER 
+       (PARTITION BY department_id ORDER BY salary ) 
+            AS third_highest_sal
+FROM   employees;
+
+
+
+SELECT    employee_id, salary 
+FROM   employees
+where salary = NTH_VALUE(salary, 2) FROM LAST OVER  ( ) 
+order by salary ;
+
+--  In contrast the function using FROM LAST call seems to be giving us a LAG of 2, rather than the third highest salary. 
+-- This is because of the default windowing clause. Instead, following query has to be used:
+
+SELECT employee_id, first_name, department_id, salary,
+       NTH_VALUE(salary, 3) FROM FIRST OVER 
+            (PARTITION BY department_id ORDER BY salary) AS third_lowest_sal,
+       NTH_VALUE(salary, 3) FROM LAST OVER 
+       (PARTITION BY department_id 
+        ORDER BY salary ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING) 
+            AS third_highest_sal
+FROM   employees;
+
+-----------------------------------
+-- PERCENT_RANK - Assigns value between 0-1 which represents the position of the current row relative to the set as a percentage
+-----------------------------------
+SELECT employee_id, first_name, department_id, salary,
+        PERCENT_RANK() OVER (ORDER BY salary) AS percent_rank_sal,
+       ROUND(PERCENT_RANK() OVER (ORDER BY salary)*100) AS percent_rank_sal_pct
+FROM   employees;
+
+
+---------------------------------------------------------------------------------------
+---List departments whose minimum salary is more than the min. salary of dept 50
+SELECT   department_id, MIN(salary)
+FROM     Employees
+GROUP BY department_id
+HAVING   MIN(salary) > (SELECT MIN(salary)
+                        FROM   Employees
+                        WHERE  department_id = 50);
+
+----------------------------------------------------------------------------------------
+-- LIST DEPARTMENT WITH MAX SUM OF SALARY
+SELECT   department_id, SUM(salary) AS TOTAL_MON_SAL
+FROM     Employees
+GROUP BY department_id
+HAVING   SUM(salary) = MAX((SELECT MAX(SUM(salary))
+                        FROM   Employees GROUP BY DEPARTMENT_ID))                        
+ORDER BY  TOTAL_MON_SAL DESC ;
+-- FOR EACH AGGREGATING FUNCTIONS , WE NEED TO SPECIFY THE GROUP BY 
+---------------------------------------------------------------------------------------
+-- DEPARTMENT WITH MORE POPULATION
+SELECT   department_id, COUNT(EMPLOYEE_ID) AS DEP_COUNT
+FROM     Employees
+GROUP BY department_id
+HAVING   COUNT(EMPLOYEE_ID) = MAX((SELECT MAX(COUNT(EMPLOYEE_ID))
+                        FROM   Employees GROUP BY DEPARTMENT_ID))                        
+ORDER BY   DEP_COUNT DESC ;
+---------------------------------------------------------------------------------------
+--- JOB WITH MAX PAY                                  
+
+SELECT  JOB_id,salary
+FROM     Employees  GROUP BY JOB_id, salary 
+HAVING   salary =(SELECT MAX( MAX(salary ))
+                FROM   Employees   GROUP BY JOB_ID)
+ORDER BY JOB_ID;
+
+
+SELECT MAX(e1.salary )FROM   Employees  e1 GROUP BY JOB_ID;
+---------------------------------------------------------------------------------------
+---- managers of employees whose salaries > 10000
+SELECT employee_id, salary, last_name 
+FROM employees m
+WHERE EXISTS (SELECT employee_id FROM employees e
+ WHERE (e.manager_id = m.employee_id) 
+AND salary > 10000);
+
+---- managers  whose salaries > 10000
+SELECT employee_id, salary, last_name 
+FROM employees m
+WHERE EXISTS (SELECT employee_id FROM employees e
+ WHERE (e.manager_id = m.employee_id) 
+AND m.salary > 10000);
+
+------------------------
+SELECT SUM(salary) * 100 / (SELECT SUM(salary) FROM Employees) AS result
+FROM Employees GROUP BY department_id;
+
+-- list of all managers
+SELECT employee_id, salary, last_name 
+FROM employees m
+WHERE EXISTS (SELECT employee_id FROM employees e
+ WHERE (e.manager_id = m.employee_id));
+--- exists is faster than in clause.
+
+SELECT * FROM departments d
+WHERE NOT EXISTS
+(SELECT * FROM employees e
+ WHERE e.department_id=d.department_id);
+---------------------------------------------------
+
+
+----- UPDATING THE VALUES 
+
+UPDATE EMPLOYEES 
+SET SALARY =SALARY *1.10
+WHERE DEPARTMENT_ID IN (SELECT DEPARTMENT_ID FROM DEPARTMENTS
+WHERE LOCATION_ID IN ( SELECT LOCATION_ID FROM LOCATIONS
+WHERE COUNTRY_ID = 'US' AND COUNTRY_ID = 'US' ) );
+-- REVERTING IT BACK
+ROLLBACK;
+
+
+-- ROLLBACK FOR A DDL IS INEFFECTIVE EX : TRUNCATE , ROLLBACK FOR A DML STATEMENT EXAMPLE: DELETE IS ROBUST.
+
+
+
+-------SUB QUERIES--------------------
+--1. CITIES WHERE THERE ARE NO DEPARTMENTS(16 ROWS)
+SELECT CITY  
+FROM LOCATIONS L 
+WHERE (L.LOCATION_ID) NOT IN (SELECT LOCATION_ID FROM DEPARTMENTS D 
+WHERE D.LOCATION_ID = L.LOCATION_ID)
+
+-- 2. IN WHICH COUNTRIES THERE ARE MAXIMUM AND MINIMUM NUMBER OF PEOPLE WORKING
+SELECT COUNTRY_NAME , C.COUNTRY_ID
+FROM COUNTRIES C 
+WHERE C.COUNTRY_ID IN (SELECT COUNTRY_ID FROM LOCATIONS L
+AND L.LOCATION_ID IN (SELECT LOCATION_ID FROM DEPARTMENTS D
+AND D.DEPARTMENT_ID IN(SELECT DEPARTMENT_ID FROM EMPLOYEES E
+AND EMPLOYEE_ID IN (SELECT MAX(COUNT(E.EMPLOYEE_ID) GROUP BY C.COUNTRY_ID 
+OR  MIN(COUNT(E.EMPLOYEE_ID)GROUP BY C.COUNTRY_ID  FROM EMPLOYEES))))));
+
+
+SELECT COUNTRY_NAME , C.COUNTRY_ID
+FROM COUNTRIES C  , EMPLOYEES E
+WHERE C.COUNTRY_ID IN (SELECT COUNTRY_ID FROM LOCATIONS L
+                        WHERE L.LOCATION_ID IN (SELECT LOCATION_ID FROM DEPARTMENTS D
+                        WHERE D.DEPARTMENT_ID IN(SELECT DEPARTMENT_ID FROM EMPLOYEES E)))
+GROUP BY E.EMPLOYEE_ID
+HAVING COUNT(EMPLOYEE_ID) IN (SELECT MAX(COUNT(EMPLOYEE_ID)) FROM EMPLOYEES E)
+OR HAVING COUNT(EMPLOYEE_ID) IN (SELECT MIN(COUNT(EMPLOYEE_ID) FROM EMPLOYEES E  ));
+
+
+
+
+----------------------------------------------------------------------------------------
+--- ASSIGNMENT
+--1. List customers who have not purchased any product. (Use a subquery)
+
+SELECT * 
+FROM ONLINE_CUSTOMER C  
+WHERE (C.CUSTOMER_ID) NOT IN (SELECT CUSTOMER_ID FROM ORDER_HEADER O 
+WHERE ORDER_STATUS LIKE 'Shipped');
+
+-- 2. For a given product id, list which other products were also bought along with it. (Use Exists)
+
+select product_desc 
+from product
+where product_id in (select product_id from order_items ot
+                     where exists (SELECT oi.order_id FROM order_items oi 
+                                           where oi.order_id = ot.order_id and oi.product_id=&number));
+------
+select P.product_desc , P.PRODUCT_ID , OI.ORDER_ID
+from product P INNER JOIN  ORDER_ITEMS OI ON (P.PRODUCT_ID = OI.PRODUCT_ID)
+where P.product_id in (select product_id from order_items
+                     where order_id in (SELECT oi.order_id FROM order_items oi
+                                        WHERE EXISTS (SELECT product_id FROM product p
+                                                      WHERE (oi.product_id = p.product_id) 
+                                                      AND oi.product_id=&NUMBER)))
+ORDER BY OI.ORDER_ID;
+
+
+select  oi.PRODUCT_ID , OI.ORDER_ID
+from product P INNER JOIN  ORDER_ITEMS OI ON (P.PRODUCT_ID = OI.PRODUCT_ID)
+where P.product_id in (select product_id from order_items
+                     where order_id in (SELECT oi.order_id FROM order_items oi
+                                        WHERE EXISTS (SELECT product_id FROM product p
+                                                      WHERE (oi.product_id = p.product_id) 
+                                                      AND oi.product_id=&NUMBER)))
+ORDER BY OI.ORDER_ID;
+----------
+SELECT department_id,COUNT(*),
+LISTAGG(first_name,',') WITHIN GROUP (ORDER BY first_name) AS employees
+FROM   employees
+GROUP BY department_id
+ORDER BY department_id;
+
+
+SELECT ORDER_id, COUNT(*),
+LISTAGG(PRODUCT_id, ',') WITHIN GROUP (ORDER BY PRODUCT_id) AS PRODUCTS
+FROM   ORDER_ITEMS
+GROUP BY ORDER_id
+ORDER BY ORDER_id;
+
+
+select * from order_items where product_id=203;
+------------------------SIR TOLD-------------------------------
+SELECT DISTINCT Product_desc as "Products bought along with 201"
+from order_items oi1 , product p
+where oi1.product_id = p.product_id
+and oi1.product_id != 201
+and exists
+( SELECT order_id from order_items oi2
+where oi1.order_id = oi2.order_id
+and oi2.product_id = 201
+)
+order by 1;
+--- 3. Which are the most and least sold products (quantity-wise)? Show their id and description
+
+select product_id, product_desc from product
+where product_id in (select product_id from order_items
+                    group by product_id 
+                    having sum(product_quantity) = (select max(sum(product_quantity)) 
+                    from order_items group by product_id))
+OR product_id in (select product_id from order_items
+                    group by product_id 
+                    having sum(product_quantity) = (select min(sum(product_quantity)) 
+                    from order_items group by product_id)); --order by sum(product_quantity) desc;
+                    
+--4. Which is the most valued customer (customer who made the highest sales)?
+
+select customer_fname, customer_lname from online_customer
+where customer_id in (select customer_id 
+                      from order_header 
+                      where order_id in (select oi.order_id from order_items oi
+                                         inner join product p
+                                         on oi.product_id = p.product_id 
+                                         group by oi.order_id
+                                         having max(oi.product_quantity*p.product_price) = (select max(ot.product_quantity*pd.product_price) from order_items ot
+                                         inner join product pd
+                                         on ot.product_id = pd.product_id)));
+
+-------
+5. List the most expensive products in their respective classes.
+
+select product_desc, product_price 
+from product where product_price in (select max(product_price) from product group by product_class_code);
+
+
+----
+-- 6. 
+---- MAX(SUM(VOLUME))
+SELECT S.SHIPPER_ID , s.shipper_name
+FROM SHIPPER S 
+WHERE S.SHIPPER_ID IN (SELECT O.SHIPPER_ID FROM ORDER_HEADER O
+WHERE O.ORDER_ID   IN (SELECT ORDER_ID FROM ORDER_ITEMS OI
+WHERE OI.PRODUCT_ID IN (SELECT PRODUCT_ID FROM PRODUCT P 
+WHERE (SUM((P.LEN*P.WIDTH*P.HEIGHT) OVER (PARTITION BY P.PRODUCT_ID)))  
+)));
+
+
+SELECT D.DEPARTMENT_ID , DEPARTMENT_NAME , SUM(SALARY)
+FROM DEPARTMENTS D , EMPLOYEES E 
+WHERE D.DEPARTMENT_ID = E.DEPARTMENT_ID 
+GROUP BY D.DEPARTMENT_ID , DEPARTMENT_NAME
+HAVING SUM(SALARY) =
+(SELECT MAX(SUM(SALARY))
+FROM DEPARTMENTS D , EMPLOYEES E 
+WHERE D.DEPARTMENT_ID = E.DEPARTMENT_ID 
+GROUP BY D.DEPARTMENT_ID);
+
+-----------------------------------------------
+SELECT S.SHIPPER_ID ,S.SHIPPER_NAME, SUM(LEN*WIDTH*HEIGHT)
+FROM SHIPPER S , ORDER_HEADER O , PRODUCT P , ORDER_ITEMS OI
+WHERE S.SHIPPER_ID = O.SHIPPER_ID
+AND OI.ORDER_ID = O.ORDER_ID 
+AND OI.PRODUCT_ID = P.PRODUCT_ID 
+GROUP BY S.SHIPPER_ID , S.SHIPPER_NAME
+HAVING SUM(LEN*WIDTH*HEIGHT) =
+                            (SELECT MAX(SUM(LEN*WIDTH*HEIGHT)) FROM PRODUCT P,ORDER_ITEMS OI ,ORDER_HEADER O , SHIPPER S
+                                                WHERE OI.PRODUCT_ID = P.PRODUCT_ID
+                                                AND OI.ORDER_ID = O.ORDER_ID 
+                                                AND O.SHIPPER_ID = S.SHIPPER_ID 
+                                              GROUP BY S.SHIPPER_ID);
+
+---7  update price of toys category products by increasing it by 20%.
+Update product
+set product_price = product_price*1.2
+where product_class_code = (select product_class_code from product_class where product_class_desc='Toys');
+
+
+
+SELECT * FROM PROJECTS ;
+
+INSERT INTO PROJECTS (PROJECT_ID , PROJECT_NAME , START_DT)
+VALUES(2001 , 'Retail Project' , SYSDATE);
+
+SELECT * FROM PROJECTS ;
+
+update projects 
+set status = 'STARTED',
+PROJECT_LEADER = 123
+WHERE PROJECT_ID = 2001 ;
+
+
+--8. Insert a new order with following details:
+--a. Order date: Today's date, Customer: Keshav, Shipper: Professional. Assume other values
+--b. Order items: Table – 5 no.s, Storage – 3 no.s and Chair – 10 no.s
+
+Insert into order_header
+values(1001, 20, sysdate, 'Shipped', 'Cash', sysdate, sysdate+1, 50005);
+
+insert into order_items 
+values (10099, 2999, 5);
+
+insert into order_items 
+values (10098, 2998, 3);
+
+insert into order_items 
+values (10097, 2997, 10);
+
+rollback;
+
+insert into product
+values (2999, 'Table', 2058, 1000, 50, 200, 300, 300, 1);
+
+insert into product
+values (2998, 'Storage', 2050, 4000, 20, 20, 30, 30, 0.3);
+
+insert into product
+values (2997, 'Chair', 2058, 1000, 50, 100, 200, 200, 0.8);
+
+
+
+
+
+
+
+----------------------------------------------LAST DAY--------------------------------------------------
+CREATE TABLE PROJECTS
+(project_id NUMBER(6) PRIMARY KEY,
+PROJECT_NAME VARCHAR2(40) NOT NULL,
+START_DT DATE NOT NULL ,
+END_DT DATE,
+STATUS VARCHAR2(20),
+PROJECT_LEADER NUMBER(6) REFERENCES EMPLOYEES(EMPLOYEE_ID));
+
+SELECT * FROM PROJECTS ;
+
+INSERT INTO PROJECTS (PROJECT_ID , PROJECT_NAME , START_DT)
+VALUES(2001 , 'Retail Project' , SYSDATE);
+
+SELECT * FROM PROJECTS ;
+
+update projects 
+set status = 'STARTED',
+PROJECT_LEADER = 123
+WHERE PROJECT_ID = 2001 ;
+
+SELECT * FROM PROJECTS ;
+
+-- HERE IF WE COMMIT 1ST AND LATER ROLLBACK IT'S OF NO USE , BECAUSE DDL'S ARE AUTOCOMMIT
+
+
+
+
+
+
+CREATE TABLE PROJ_ALLOCN
+(
+PROJECT_ID NUMBER(6) REFERENCES PROJECTS(PROJECT_ID),
+EMP_ID NUMBER(6) REFERENCES EMPLOYEES(EMPLOYEE_ID) ,
+START_DT DATE,
+END_DT DATE ,
+PROJ_ROLE VARCHAR2(10) CHECK(PROJ_ROLE IN( 'DVLP','TSTR','DSGN','LEDR' )),
+CONSTRAINT PROJ_ALLOCN_PK PRIMARY KEY ( PROJECT_ID , EMP_ID , START_DT )
+);
+
+INSERT INTO PROJ_ALLOCN (PROJECT_ID , EMP_ID , START_DT,PROJ_ROLE )
+VALUES(2001 , 111 , '19-Jul-2018' , 'DVLP');
+INSERT INTO PROJ_ALLOCN (PROJECT_ID , EMP_ID , START_DT,PROJ_ROLE )
+VALUES(2001 , 112 , '19-Jul-2018' , 'DVLP');
+INSERT INTO PROJ_ALLOCN (PROJECT_ID , EMP_ID , START_DT,PROJ_ROLE )
+VALUES(2001 , 113 , '19-Jul-2018' , 'DVLP');
+INSERT INTO PROJ_ALLOCN (PROJECT_ID , EMP_ID , START_DT,PROJ_ROLE )
+VALUES(2001 , 123 , '19-Jul-2018' , 'LEDR');
+
+SELECT * FROM PROJ_ALLOCN ; -- SINCE WE GAVE THE SYSDATE HERE , AS THE TIME CHANGES , THE OBSERVATIONS CHANGE 
+
+
+---------------------------------------------------------------------------
+
+-- DATABASE VIEW
+CREATE or replace VIEW basic_emp_view1 AS
+SELECT EMPLOYEE_ID , FIRST_NAME , LAST_NAME , EMAIL, PHONE_NUMBER 
+FROM EMPLOYEES 
+WHERE DEPARTMENT_ID IN(10,20,30,40,50);
+
+SELECT * FROM BASIC_EMP_VIEW1 ;
+
+SHOW USER 
+
+-- GRANT SELECT ON BASIC_EMP_VIEW TO TRNGUSER01 ; -- BY THIS OTHER USER TRNGUSER01 CAN SELECT THE DATA FROM BASIC_EMP_VIEW
+-- IN GRANTING , WE CAN USE SELECT , ALTER , INSERT , DELETE , ETC., 
+-- REVOKE IS OPPOSITE OF GRANT i.e., if we want to cancel the grant of some privelege , we use revoke.
+SELECT * FROM HR.BASIC_EMP_VIEW ;
+
+UPDATE HR.BASIC_EMP_VIEW SET PHONE_NUMBER = '515.213.3434'
+WHERE EMPLOYEE_ID = 111 ;-- WE CNA'T DO THIS BECAUSE , HE HAS ACCESS ONLY TO READ.
+
+---------  PL/SQL-----
+SET SERVEROUTPUT ON
+DECLARE
+V_NAME VARCHAR2(40);
+
+begin 
+V_NAME := 'BALAYYA';
+dbms_output.put_line (V_NAME || '  SAYS  OMG .... WHAT''S GOING ON HERE ??????? ');
+end ;
+--------------------------------------------------------------------------------
+SET SERVEROUTPUT ON
+DECLARE
+V_NAME VARCHAR2(40);
+V_AGE NUMBER(3):= 65;
+V_PROFILE VARCHAR2(20);
+
+begin 
+IF V_AGE <0 OR V_AGE > 120 THEN
+dbms_output.put_line ('INVALID AGE ');
+ELSIF V_AGE <= 12 THEN
+   V_PROFILE := 'Child' ;
+ELSIF V_AGE < 18 THEN
+   V_PROFILE := 'Juvenile' ;
+ELSIF V_AGE < 60 THEN
+   V_PROFILE := 'Adult' ;
+ELSIF V_AGE < 80 THEN
+   V_PROFILE := 'Sr.Citizen' ;
+   
+ELSE 
+    V_PROFILE := 'Super Sr.Citizen' ;
+ END IF;
+   dbms_output.put_line('Age'||v_age||'profile:'||v_profile);
+end ;
+
+-----------------------------------------------------------------
+
+DECLARE
+  v_num NUMBER(3) :=  3 ; -- &number - Substitution variable
+  V_INDEX NUMBER(3) := 1 ;
+  V_PRODUCT NUMBER(4);
+BEGIN
+ LOOP 
+    V_PRODUCT := v_num*v_index  ;
+    dbms_output.put_line(v_num || 'x'||v_index || '='||v_product );
+     V_INDEX := V_INDEX +1 ;
+     if v_index >20 then 
+     exit ;
+    end if ; 
+  end loop ;
+   dbms_output.put_line('******' );
+end;
+  
+------------------------------------ for loop index need not be explicitly declared--------------
+
+DECLARE
+  v_num NUMBER(3) := 7; -- Substitution variable
+  V_PRODUCT NUMBER(4);
+  v_index2 NUMBER(3);
+BEGIN
+for V_INDEX in 1..20 --exactly 2 dots
+ LOOP 
+ v_index2 := v_index*2 ;
+    V_PRODUCT := v_num*V_INDEX2 ;
+    dbms_output.put_line(v_num ||'x'||v_index2 || '='||v_product );
+  end loop ;
+
+end;
+
+----------------------------------------------------------------------
+
+DECLARE
+  v_num NUMBER(3) := 7; -- Substitution variable
+  V_PRODUCT NUMBER(4);
+  V_INDEX  NUMBER(3) := 1;
+
+BEGIN
+WHILE V_INDEX <= 20
+ LOOP 
+    V_PRODUCT := v_num * V_INDEX ;
+    dbms_output.put_line (v_num ||'x'||v_index || '='||v_product );
+    V_INDEX := V_INDEX +1 ;
+  end loop ;
+end;
+--------------------------------------------------------------------------
+
+
+DECLARE 
+ V_EMP_NUM NUMBER(4) := 123 ;
+ V_FIRST_NAME VARCHAR2(30);
+  V_LAST_NAME VARCHAR2(30);
+  V_SALARY NUMBER(12,2); -- 12 PLACES UPTO 2 DECIMALS
+BEGIN 
+  SELECT  FIRST_NAME , LAST_NAME ,SALARY-- HERE WE NEED TO USE INTO BY WHICH IT CREATES VARIABLES TO HOLD THE VALUES WE NEED
+  INTO V_FIRST_NAME , V_LAST_NAME ,V_SALARY  --- 'INTO' IS A SINGLE TERM SELECT , FOR MULTIPLE TERMS WE NEED TO USE CURSORS
+  FROM EMPLOYEES
+  WHERE EMPLOYEE_ID = V_EMP_NUM ;
+   dbms_output.put_line (V_FIRST_NAME||' '|| V_LAST_NAME||' '||V_SALARY );
+END;
+----------------------------------------------------------
+
+DECLARE 
+ V_EMP_NUM NUMBER(4) := 1234 ;
+  v_emp_rec employees%ROWTYPE ; -- THIS GIVES THE FORMAT OF THE EMPLOYEE RECORD(OR ROW) WHICH GETS THE VALUE BASED ON THE CONDITION WE PROVIDE
+BEGIN 
+  SELECT  * INTO V_EMP_REC -- 'INTO' IS A SINGLE TERM SELECT , FOR MULTIPLE TERMS WE NEED TO USE CURSORS
+  FROM EMPLOYEES   -- V_EMP_REC AN HOLD ONLY 1 RECORD , TO HOLD MULTIPLE RECORDS , WE USE CURSORS
+  WHERE EMPLOYEE_ID = V_EMP_NUM ;
+  dbms_output.put_line ('Details of emp.id: '|| V_emp_num );
+   dbms_output.put_line (V_emp_rec.FIRST_NAME||' '|| V_emp_rec.LAST_NAME||' '||V_emp_rec.SALARY );
+   EXCEPTION
+   WHEN NO_DATA_FOUND THEN 
+   dbms_output.put_line ('Invalid emp.id'|| v_emp_Num);
+   dbms_output.put_line (SQLERRM);
+END;
+--------------------------------------------CURSORS-------------------------------------------------------
+--- IF CURSOR DIDN'T GET ANY ROW , IT DOES'T GO IN TO EXCEPTION
+DECLARE 
+ V_EMP_NUM NUMBER(4) := 4444;
+  v_emp_rec employees%ROWTYPE ; 
+  
+CURSOR emp_cur IS
+  select * FROM EMPLOYEES   
+  WHERE EMPLOYEE_ID = V_EMP_NUM ;
+BEGIN 
+  OPEN emp_cur; --it's select get's executed
+  loop
+   fetch emp_cur into V_emp_rec ;   --  FETCH ONE RECORD-- since the structure of emp_rec and emp_cur are same
+    exit when emp_cur%NOTFOUND; -- CHECK FOR EXIT CONDITION
+    dbms_output.put_line (EMP_CUR%ROWCOUNT||'. '||V_EMP_REC.EMPLOYEE_ID||' '||V_emp_rec.FIRST_NAME||' '|| V_emp_rec.LAST_NAME||' '||V_emp_rec.SALARY );
+  end loop;
+  IF EMP_CUR%ROWCOUNT = 0 THEN
+       dbms_output.put_line ('Invalid emp.id'|| v_emp_Num);
+       END IF ;
+       RAISE NO_DATA_FOUND;
+  CLOSE EMP_CUR;
+   EXCEPTION
+   WHEN NO_DATA_FOUND THEN 
+   dbms_output.put_line (SQLERRM);
+END;
+
+----------------------------SIMPLER VERSION CURSOR FOR LOOP------------------------------
+
+-- REFER THE CODE GIVEN FOR DETAILED CODE .. IT'S BETTER
+
+SET SERVEROUTPUT ON
+
+DECLARE 
+ V_EMP_NUM NUMBER(4) := 123;
+  -- for loop index need not be declared explicitly  
+  v_count NUMBER(4) := 0 ;
+CURSOR emp_cur IS
+  select * FROM EMPLOYEES   
+  WHERE EMPLOYEE_ID > V_EMP_NUM ;
+BEGIN 
+ dbms_output.put_line ('EMPLOYEE list :');
+  FOR V_EMP_REC IN EMP_CUR
+  loop 
+    dbms_output.put_line (EMP_CUR%ROWCOUNT||'. '||V_EMP_REC.EMPLOYEE_ID||' '||V_emp_rec.FIRST_NAME||' '|| V_emp_rec.LAST_NAME||' '||V_emp_rec.SALARY );
+    v_count := emp_cur%ROWCOUNT ;
+  end loop;
+ IF v_count = 0 THEN
+ RAISE NO_DATA_FOUND;
+ end if;
+   EXCEPTION
+   WHEN NO_DATA_FOUND THEN 
+   dbms_output.put_line ( 'Invalid emp.id '|| v_emp_num );
+   dbms_output.put_line (SQLERRM);
+END;
+
+
+----------------------------------------------
+SET SERVEROUTPUT ON
+
+CREATE OR REPLACE PROCEDURE print_emp_dtls (p_dept_id NUMBER) AS
+  v_count NUMBER(4) := 0 ;
+  V_DEPT_NAME Departments.department_name%TYPE;
+CURSOR emp_cur IS
+  select * FROM EMPLOYEES   
+  WHERE DEPARTMENT_ID = P_DEPT_ID ; -- P IS PARAMETER
+BEGIN 
+select department_name into v_dept_name
+from departments where DEPARTMENT_ID = P_DEPT_ID ;
+ dbms_output.put_line ('EMPLOYEE list in dept:'|| v_dept_name);
+  FOR V_EMP_REC IN EMP_CUR
+  loop
+    dbms_output.put_line (EMP_CUR%ROWCOUNT||'. '||V_EMP_REC.EMPLOYEE_ID||' '||V_emp_rec.FIRST_NAME||' '|| V_emp_rec.LAST_NAME||' '||V_emp_rec.SALARY );
+    v_count := emp_cur%ROWCOUNT ;
+  end loop;
+ IF v_count = 0 THEN
+ RAISE NO_DATA_FOUND;
+ END IF;
+   EXCEPTION
+   WHEN NO_DATA_FOUND THEN 
+   dbms_output.put_line ( 'Invalid dept.id '||p_dept_id );
+   dbms_output.put_line (SQLERRM);
+END;
+---
+SET SERVEROUTPUT ON
+ begin
+ print_emp_dtls(100);
+ end;
+-------------------------------------------
+SELECT --- TO RETREIVE THE CODE IF WE LOSE IT
+line,text from user_source 
+where lower(name) = 'print_emp_dtls'
+order by line;
+------------------------FUNCTIONS----------------------------
+-- ONLY DIFFERENCE IS THAT IT NEEDS TO RETURN A VALUE
+--GIVEN A PRODUC_ID , FUNCTION TO CALCULATE IT'S VOLUME
+
+
+CREATE OR REPLACE FUNCTION GET_ORDER_VOL(P_ORD_ID NUMBER) 
+RETURN NUMBER AS
+ V_TOTAL_VOL NUMBER(10);
+BEGIN 
+SELECT SUM(LEN*WIDTH*HEIGHT)
+INTO V_TOTAL_VOL
+FROM PRODUCT P , ORDER_ITEMS OI
+WHERE OI.ORDER_ID = P_ORD_ID
+AND OI.PRODUCT_ID = P.PRODUCT_ID;
+IF V_TOTAL_VOL IS NULL THEN
+RETURN -1 ;
+END IF;
+RETURN V_TOTAL_VOL;
+END;
+--------
+set serveroutput on
+DECLARE
+V_TOTAL_VOL NUMBER(10);
+BEGIN
+ V_TOTAL_VOL :=  GET_ORDER_VOL (77888);
+ IF V_TOTAL_VOL = -1 THEN
+  dbms_output.put_line ('INVALID ORDER ID');
+  ELSE
+  dbms_output.put_line (V_TOTAL_VOL);
+  END IF;
+END;
+
+
+
+SELECT ORDER_ID , GET_ORDER_VOL(ORDER_ID)
+FROM ORDER_HEADER WHERE ORDER_ID < 10010;
+
+------------------------------------------------
+
+
+
+SELECT oi2.order_id ,oi2.product_id 
+from ORDER_ITEMS OI1 ,ORDER_ITEMS_OI2
+WHERE OI1.ORDER_ID = OI2.ORDER_ID
+AND oi1.product_id = 202
+AND oi1.product_id ! = oi2.product_id;
+
+select product_id from order_items where order_id = 10009;
+
+
+
+ ----Given a customer id, write a function to return the total value of all orders that (s)he has ordered (exclude Cancelled orders).
+
+
+
+
+
+
+
+
+CREATE OR REPLACE FUNCTION GET_ORDER_VOL(cust_id NUMBER) 
+RETURN NUMBER AS
+ V_TOTAL_Val NUMBER(20);
+BEGIN 
+SELECT SUM(oi.product_quantity * p.product_price) INTO V_TOTAL_VaL
+FROM PRODUCT P , ORDER_ITEMS OI , order_header o
+WHERE  o.order_id = oi.order_id
+and OI.PRODUCT_ID = P.PRODUCT_ID
+and o.order_status !='Cancelled'
+and o.customer_id = cust_id ;
+
+IF V_TOTAL_VaL IS NULL THEN
+RETURN -1 ;
+END IF;
+RETURN V_TOTAL_VaL;
+END;
+--------
+
+
+DECLARE
+V_TOTAL_VaL NUMBER(20);
+BEGIN
+ V_TOTAL_VaL :=  GET_ORDER_VOL (&number);
+ IF V_TOTAL_VaL = -1 THEN
+  dbms_output.put_line ('invalid customer id');
+  ELSE
+  dbms_output.put_line ('The total value of all orders ordered: '||V_TOTAL_VaL);
+  END IF;
+END;
+
+--------------------------------------
+
+set serveroutput on
+create or replace procedure print_prod_dtls as
+    v_count number(4);
+    cursor prod_cur IS
+    
+   select p.product_id as prod_id ,product_desc, nvl(sum(oi.product_quantity),0) as Quantity, 
+    nvl(SUM(oi.product_quantity*p.product_price),0) as total_price
+    FROM order_items oi, product p, order_header oh
+    WHERE oi.product_id (+) = p.product_id
+    AND oi.order_id = oh.order_id 
+    AND oh.order_status ='Shipped'
+    group by p.product_id, product_desc
+    order by total_price desc;
+    
+    begin
+        
+        dbms_output.put_line('Product report which are shipped:');
+        dbms_output.put_line('Product Id'||' '||'Product desc'||' '||'Total Qty Shipped'||' '||'Total Value');
+       for rec in prod_cur    
+        
+        loop              
+            dbms_output.put_line(rec.prod_id||' '||rec.product_desc||' '||rec.Quantity||' '||rec.total_price);
+            v_count :=prod_cur%ROWCOUNT;
+            
+        end loop;     
+             
+             if v_count =0 then
+             raise NO_DATA_FOUND;
+             end if;
+             
+        EXCEPTION
+                WHEN NO_DATA_FOUND then
+                dbms_output.put_line('No data found');
+                dbms_output.put_line(SQLERRM);
+    end;
+    
+set serveroutput on
+EXECUTE print_prod_dtls;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+SELECT 	CASE 
+WHEN NULL = NULL THEN ‘YES’ 
+	ELSE ‘NO’ END AS Result 
+FROM DUAL;
+
+
+
+
